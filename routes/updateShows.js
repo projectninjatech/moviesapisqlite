@@ -176,11 +176,7 @@ router.post('/update-show/:id', async (req, res) => {
             // Execute the function to update seasons and episodes
             await updateSeasonsAndEpisodes();
 
-            // Update successful, render success message
-            res.render('updateMovieDetails', {
-                movie: req.body.showDetails,
-                successMessage: 'Download links updated successfully!'
-            });
+            res.json({ success: true });
         });
     } catch (error) {
         console.error(error);

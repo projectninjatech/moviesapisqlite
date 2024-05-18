@@ -189,7 +189,8 @@ router.post('/add-show-details', async (req, res) => {
             });
         }
 
-        res.status(201).json({ showID });
+        // res.status(201).json({ showID });
+        res.json({ success: true });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to submit TV show details' });
