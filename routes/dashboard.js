@@ -35,4 +35,12 @@ router.get('/updateShowsRoute', isAdminAuthenticated, (req, res) => {
     res.redirect('/edit-shows-list');
 });
 
+router.get('/deleteShowsRoute', isAdminAuthenticated, (req, res) => {
+    res.redirect('/delete-show');
+});
+
+router.get('/poster-link-update', isAdminAuthenticated, (req, res) => {
+    res.render('managePosters.hbs');
+});
+
 module.exports = router;

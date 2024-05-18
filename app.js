@@ -46,6 +46,7 @@ const updateShows = require('./routes/updateShows')
 const watchedShows = require('./routes/watchedShows')
 const getShows = require('./routes/getShows')
 const showsMylist = require('./routes/showsMylist')
+const deleteShows = require('./routes/deleteShow')
 const checkcon = require('./routes/checkcon')
 
 app.use('/', authRoutes);
@@ -63,6 +64,7 @@ app.use('/', updateShows)
 app.use('/', watchedShows)
 app.use('/', getShows)
 app.use('/', showsMylist)
+app.use('/', deleteShows)
 app.use('/', checkcon)
 
 

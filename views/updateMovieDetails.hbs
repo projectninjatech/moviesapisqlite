@@ -14,13 +14,14 @@
     <a href="/">Go to Dashboard</a>
     <div class="movieDetailsContainer">
         <div class="posterContainer">
-            <img src="https://image.tmdb.org/t/p/original/{{movie.posterPath}}" alt="Movie Poster">
+            <img alt="Movie Poster" data-poster-path="{{movie.posterPath}}">
         </div>
 
         <div class="detailsTextContainer">
             <h2>{{movie.title}}</h2>
             <p style="font-size: 0.8em; margin-bottom:5px">{{movie.overview}}</p>
-            <p style="font-size: 0.8em; font-weight: bold;">{{movie.releaseDate}} • {{movie.genres}} • {{movie.runtime}}mins</p>
+            <p style="font-size: 0.8em; font-weight: bold;">{{movie.releaseDate}} • {{movie.genres}} •
+                {{movie.runtime}}mins</p>
         </div>
     </div>
     <form class="formContainer" action="/update-movie/{{movie._id}}" method="post">
@@ -92,6 +93,19 @@
     {{#if successMessage}}
     <p style="color: green;">{{successMessage}}</p>
     {{/if}}
+
+    <script>
+        // Get all poster images
+        const posterImage = document.querySelector('.posterContainer img');
+        const posterPath = posterImage.getAttribute('data-poster-path');
+        console.log("Poster image", posterPath)
+        if (posterPath.startsWith('http://')) {
+            posterImage.src = posterPath;
+        } else {
+            posterImage.src = `https://image.tmdb.org/t/p/original/${posterPath}`;
+        }
+
+    </script>
 </body>
 
 </html>

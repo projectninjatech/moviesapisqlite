@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
@@ -5,33 +6,31 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../db');
 
-// Function to download poster image
-async function downloadPoster(posterUrl, movieId) {
+async function downloadPoster(posterURL, posterID) {
     try {
-        const response = await axios.get(posterUrl, {
+        // console.log("Poster ID", posterID)
+        const response = await axios.get(posterURL, {
             responseType: 'stream'
         });
-        
-        // const posterDirectory = "C:\\Users\\imran\\OneDrive\\Documents\\NodeJS Projects\\MoviesAPISQLite\\public\\posters";
-        // const posterPath = path.join(posterDirectory, `${movieId}.jpg`);
 
-        const posterPath = path.join(__dirname, '../public/posters', `${movieId}.jpg`); // Path to save the poster
-        response.data.pipe(fs.createWriteStream(posterPath)); // Save the poster image
+        const posterDirectory = `${process.env.HTTP_SERVER_MEDIA_DIR}/posters`;
+        const posterPath = path.join(posterDirectory, `${posterID}.jpg`);
+        response.data.pipe(fs.createWriteStream(posterPath));
 
-        const newPosterUrl = `http://192.168.0.205:8080/${movieId}.png`; // New URL
-        return { posterPath, newPosterUrl };
+        const newPosterUrl = `http://${process.env.SERVER_IP}:8080/posters/${posterID}.jpg`; // New URL
+        return { newPosterUrl };
     } catch (error) {
         console.error('Error downloading poster:', error);
         return null;
     }
 }
 
-// Endpoint to download all poster images
-router.get('/download-posters', async (req, res) => {
+
+router.get('/download-movies-posters', async (req, res) => {
     try {
-        // Query database to get all movie details with poster URLs
-        const movies = await new Promise((resolve, reject) => {
-            db.all('SELECT movieID, posterPath FROM movies', (err, rows) => {
+        // Fetch all movies posters
+        const moviesPoster = await new Promise((resolve, reject) => {
+            db.all('SELECT posterPath FROM movies', (err, rows) => {
                 if (err) {
                     reject(err);
                 } else {
@@ -40,34 +39,244 @@ router.get('/download-posters', async (req, res) => {
             });
         });
 
-        // Download each poster image
-        const updatedMovies = [];
-        for (const movie of movies) {
-            if (movie.posterPath) {
-                const posterUrl = movie.posterPath;
-                const movieId = movie.movieID;
-                const { posterPath, newPosterUrl } = await downloadPoster(posterUrl, movieId);
-                if (posterPath) {
-                    // Update database with new URL
-                    await new Promise((resolve, reject) => {
-                        db.run('UPDATE movies SET posterPath = ? WHERE movieID = ?', [newPosterUrl, movieId], (err) => {
-                            if (err) {
-                                reject(err);
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-                    updatedMovies.push({ movieId, newPosterUrl });
-                }
-            }
+        // Download movies posters
+        for (const mv of moviesPoster) {
+            const posterURL = mv.posterPath;
+            const moviePosterID = posterURL.substring(posterURL.lastIndexOf('/') + 1, posterURL.lastIndexOf('.'));
+            await downloadPoster(posterURL, moviePosterID);
         }
 
-        res.json({ success: true, updatedMovies });
+        const oldUrlPrefix = 'https://image.tmdb.org/t/p/original/';
+        const newUrlPrefix = `http://${process.env.SERVER_IP}:8080/posters/`;
+
+        // Update movies posters URL
+        const updateEpisodesQuery = `
+            UPDATE movies
+            SET posterPath = REPLACE(posterPath, ?, ?)
+            WHERE posterPath LIKE ?;
+        `;
+        db.run(updateEpisodesQuery, [oldUrlPrefix, newUrlPrefix, `${oldUrlPrefix}%`], function(err) {
+            if (err) {
+                return console.error('Error updating episode posters:', err.message);
+            }
+            console.log(`Episode posters updated: ${this.changes}`);
+        });
+        res.json({ success: true, message: 'Movie Posters downloaded and URLs updated successfully' });
     } catch (error) {
         console.error('Error downloading posters:', error);
         res.status(500).json({ success: false, error: 'Failed to download posters' });
     }
 });
+
+router.get('/download-shows-posters', async (req, res) => {
+    try {
+        // Fetch all episode posters
+        const episodesPoster = await new Promise((resolve, reject) => {
+            db.all('SELECT poster FROM episodes', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+
+        // Fetch all TV show posters
+        const showsPoster = await new Promise((resolve, reject) => {
+            db.all('SELECT posterPath FROM tv_shows', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+
+        // Download episode posters
+        for (const ep of episodesPoster) {
+            const posterURL = ep.poster;
+            const episodePosterID = posterURL.substring(posterURL.lastIndexOf('/') + 1, posterURL.lastIndexOf('.'));
+            await downloadPoster(posterURL, episodePosterID);
+        }
+
+        // Download TV show posters
+        for (const show of showsPoster) {
+            const posterURL = show.posterPath;
+            const showPosterID = posterURL.substring(posterURL.lastIndexOf('/') + 1, posterURL.lastIndexOf('.'));
+            await downloadPoster(posterURL, showPosterID);
+        }
+
+        const oldUrlPrefix = 'https://image.tmdb.org/t/p/original/';
+        const newUrlPrefix = `http://${process.env.SERVER_IP}:8080/posters/`;
+
+        // Update episode posters URL
+        const updateEpisodesQuery = `
+            UPDATE episodes
+            SET poster = REPLACE(poster, ?, ?)
+            WHERE poster LIKE ?;
+        `;
+        db.run(updateEpisodesQuery, [oldUrlPrefix, newUrlPrefix, `${oldUrlPrefix}%`], function(err) {
+            if (err) {
+                return console.error('Error updating episode posters:', err.message);
+            }
+            console.log(`Episode posters updated: ${this.changes}`);
+        });
+
+        // Update TV show posters URL
+        const updateShowsQuery = `
+            UPDATE tv_shows
+            SET posterPath = REPLACE(posterPath, ?, ?)
+            WHERE posterPath LIKE ?;
+        `;
+        db.run(updateShowsQuery, [oldUrlPrefix, newUrlPrefix, `${oldUrlPrefix}%`], function(err) {
+            if (err) {
+                return console.error('Error updating TV show posters:', err.message);
+            }
+            console.log(`TV show posters updated: ${this.changes}`);
+        });
+
+        res.json({ success: true, message: 'TV Show Posters downloaded and URLs updated successfully' });
+    } catch (error) {
+        console.error('Error downloading posters:', error);
+        res.status(500).json({ success: false, error: 'Failed to download posters' });
+    }
+});
+
+
+
+// Function to delete posters
+async function deletePoster(posterID) {
+    try {
+        const posterDirectory = `${process.env.HTTP_SERVER_MEDIA_DIR}/posters`;
+        const posterPath = path.join(posterDirectory, `${posterID}.jpg`);
+        if (fs.existsSync(posterPath)) {
+            fs.unlinkSync(posterPath);
+        }
+        return true;
+    } catch (error) {
+        console.error('Error deleting poster:', error);
+        return false;
+    }
+}
+
+// Endpoint to delete movie posters
+router.get('/delete-movies-posters', async (req, res) => {
+    try {
+        // Fetch all movies posters
+        const moviesPoster = await new Promise((resolve, reject) => {
+            db.all('SELECT posterPath FROM movies', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+
+        // Delete movies posters
+        for (const mv of moviesPoster) {
+            const posterURL = mv.posterPath;
+            const moviePosterID = posterURL.substring(posterURL.lastIndexOf('/') + 1, posterURL.lastIndexOf('.'));
+            await deletePoster(moviePosterID);
+        }
+
+        const oldUrlPrefix = `http://${process.env.SERVER_IP}:8080/posters/`;
+        const newUrlPrefix = 'https://image.tmdb.org/t/p/original/';
+
+        // Update movies posters URL
+        const updateMoviesQuery = `
+            UPDATE movies
+            SET posterPath = REPLACE(posterPath, ?, ?)
+            WHERE posterPath LIKE ?;
+        `;
+        db.run(updateMoviesQuery, [oldUrlPrefix, newUrlPrefix, `${oldUrlPrefix}%`], function(err) {
+            if (err) {
+                return console.error('Error updating movie posters:', err.message);
+            }
+            console.log(`Movie posters updated: ${this.changes}`);
+        });
+        res.json({ success: true, message: 'Movie Posters deleted and URLs updated successfully' });
+    } catch (error) {
+        console.error('Error deleting posters:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete posters' });
+    }
+});
+
+
+// Endpoint to delete TV show and episode posters
+router.get('/delete-shows-and-episodes-posters', async (req, res) => {
+    try {
+        // Fetch all TV show posters
+        const showsPoster = await new Promise((resolve, reject) => {
+            db.all('SELECT posterPath FROM tv_shows', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+
+        // Fetch all episode posters
+        const episodesPoster = await new Promise((resolve, reject) => {
+            db.all('SELECT poster FROM episodes', (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
+
+        // Delete TV show posters
+        for (const show of showsPoster) {
+            const posterURL = show.posterPath;
+            const showPosterID = posterURL.substring(posterURL.lastIndexOf('/') + 1, posterURL.lastIndexOf('.'));
+            await deletePoster(showPosterID);
+        }
+
+        // Delete episode posters
+        for (const ep of episodesPoster) {
+            const posterURL = ep.poster;
+            const episodePosterID = posterURL.substring(posterURL.lastIndexOf('/') + 1, posterURL.lastIndexOf('.'));
+            await deletePoster(episodePosterID);
+        }
+
+        const oldUrlPrefix = `http://${process.env.SERVER_IP}:8080/posters/`;
+        const newUrlPrefix = 'https://image.tmdb.org/t/p/original/';
+
+        // Update TV show posters URL
+        const updateShowsQuery = `
+            UPDATE tv_shows
+            SET posterPath = REPLACE(posterPath, ?, ?)
+            WHERE posterPath LIKE ?;
+        `;
+        db.run(updateShowsQuery, [oldUrlPrefix, newUrlPrefix, `${oldUrlPrefix}%`], function(err) {
+            if (err) {
+                return console.error('Error updating TV show posters:', err.message);
+            }
+            console.log(`TV show posters updated: ${this.changes}`);
+        });
+
+        // Update episode posters URL
+        const updateEpisodesQuery = `
+            UPDATE episodes
+            SET poster = REPLACE(poster, ?, ?)
+            WHERE poster LIKE ?;
+        `;
+        db.run(updateEpisodesQuery, [oldUrlPrefix, newUrlPrefix, `${oldUrlPrefix}%`], function(err) {
+            if (err) {
+                return console.error('Error updating episode posters:', err.message);
+            }
+            console.log(`Episode posters updated: ${this.changes}`);
+        });
+
+        res.json({ success: true, message: 'TV Show and Episode Posters deleted and URLs updated successfully' });
+    } catch (error) {
+        console.error('Error deleting posters:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete posters' });
+    }
+});
+
 
 module.exports = router;
